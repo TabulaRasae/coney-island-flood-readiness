@@ -1,0 +1,61 @@
+{
+  "generated_at": "2026-05-19T14:27:59.076033+00:00",
+  "area": {
+    "name": "Coney Island screening bbox",
+    "bbox_wgs84": {
+      "west": -73.999,
+      "south": 40.565,
+      "east": -73.93,
+      "north": 40.595
+    }
+  },
+  "model_version": "flood-context-v2",
+  "feature_count": 17867,
+  "measured_count": 14275,
+  "estimated_count": 3592,
+  "unverified_count": 0,
+  "suspect_zero_count": 546,
+  "fema_matched_count": 17866,
+  "fema_bfe_count": 3635,
+  "status_counts": {
+    "no_flood_context": 14232,
+    "measured_base_flood_elevation_screening": 560,
+    "estimated_below_base_flood_elevation": 604,
+    "measured_current_standard_screening": 851,
+    "measured_below_base_flood_elevation": 1427,
+    "estimated_base_flood_elevation_screening": 130,
+    "estimated_current_standard_screening": 63
+  },
+  "confidence_counts": {
+    "measured": 14275,
+    "estimated": 3592,
+    "unverified": 0
+  },
+  "qa_counts": {
+    "feature_count": 17867,
+    "measured_count": 14275,
+    "estimated_count": 3592,
+    "unverified_count": 0,
+    "suspect_zero_count": 546,
+    "fema_matched_count": 17866,
+    "fema_bfe_count": 3635
+  },
+  "sources": {
+    "nyc_building_elevation_subgrade": {
+      "name": "NYC Building Elevation and Subgrade",
+      "url": "https://data.cityofnewyork.us/resource/bsin-59hv.json",
+      "docs": "https://catalog.data.gov/dataset/building-elevation-and-subgrade-bes"
+    },
+    "nyc_building_footprints": {
+      "name": "NYC Building Footprints",
+      "url": "https://services2.arcgis.com/IsDCghZ73NgoYoz5/ArcGIS/rest/services/NYC_Building_Footprint/FeatureServer/0/query",
+      "docs": "https://services2.arcgis.com/IsDCghZ73NgoYoz5/ArcGIS/rest/services/NYC_Building_Footprint/FeatureServer"
+    },
+    "fema_nfhl": {
+      "name": "FEMA National Flood Hazard Layer",
+      "url": "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer",
+      "flood_hazard_zones_layer": 28,
+      "base_flood_elevations_layer": 16
+    }
+  }
+}

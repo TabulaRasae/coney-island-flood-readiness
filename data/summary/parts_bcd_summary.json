@@ -1,0 +1,116 @@
+{
+  "app_bbox": {
+    "west": -73.999,
+    "south": 40.565,
+    "east": -73.93,
+    "north": 40.595
+  },
+  "tract_count": 59,
+  "tracts_with_buildings": 59,
+  "population_screening_area_sum": 208603,
+  "median_of_tract_median_household_income": 67218.0,
+  "median_of_tract_median_gross_rent": 1723.0,
+  "approx_poverty_rate": 20.395590300215236,
+  "approx_renter_share": 64.79447794047277,
+  "below_bfe_buildings": 2031,
+  "bfe_context_buildings": 3635,
+  "below_bfe_share_bfe_context": 55.873452544704264,
+  "lowest_income_tract": {
+    "name": "Census Tract 352, Kings, NY",
+    "median_household_income": 13240.0,
+    "poverty_rate": 60.11804384485666,
+    "vulnerable_count": 84
+  },
+  "highest_vulnerability_tract": {
+    "name": "Census Tract 348, Kings, NY",
+    "median_household_income": 53710.0,
+    "poverty_rate": 20.52474261042843,
+    "vulnerable_count": 343
+  },
+  "income_tiers": [
+    {
+      "label": "Lowest income",
+      "tracts": 11,
+      "income_min": 13240.0,
+      "income_max": 49911.0,
+      "median_income": 30176.0,
+      "building_count": 1526,
+      "bfe_context_count": 783,
+      "vulnerable_count": 522,
+      "measured_vulnerable_count": 435,
+      "estimated_vulnerable_count": 87,
+      "vulnerable_share_bfe_context": 66.66666666666667,
+      "median_poverty_rate": 34.18934457646608
+    },
+    {
+      "label": "Lower-middle",
+      "tracts": 12,
+      "income_min": 50456.0,
+      "income_max": 59004.0,
+      "median_income": 53618.0,
+      "building_count": 3607,
+      "bfe_context_count": 1292,
+      "vulnerable_count": 843,
+      "measured_vulnerable_count": 671,
+      "estimated_vulnerable_count": 172,
+      "vulnerable_share_bfe_context": 65.24767801857585,
+      "median_poverty_rate": 17.65323439888558
+    },
+    {
+      "label": "Middle",
+      "tracts": 11,
+      "income_min": 61944.0,
+      "income_max": 69493.0,
+      "median_income": 67218.0,
+      "building_count": 4496,
+      "bfe_context_count": 358,
+      "vulnerable_count": 202,
+      "measured_vulnerable_count": 115,
+      "estimated_vulnerable_count": 87,
+      "vulnerable_share_bfe_context": 56.42458100558659,
+      "median_poverty_rate": 13.694975544686528
+    },
+    {
+      "label": "Upper-middle",
+      "tracts": 12,
+      "income_min": 69563.0,
+      "income_max": 81051.0,
+      "median_income": 73763.5,
+      "building_count": 3488,
+      "bfe_context_count": 333,
+      "vulnerable_count": 152,
+      "measured_vulnerable_count": 124,
+      "estimated_vulnerable_count": 28,
+      "vulnerable_share_bfe_context": 45.645645645645644,
+      "median_poverty_rate": 16.36164554485135
+    },
+    {
+      "label": "Highest income",
+      "tracts": 11,
+      "income_min": 83558.0,
+      "income_max": 183095.0,
+      "median_income": 101193.0,
+      "building_count": 4733,
+      "bfe_context_count": 869,
+      "vulnerable_count": 312,
+      "measured_vulnerable_count": 82,
+      "estimated_vulnerable_count": 230,
+      "vulnerable_share_bfe_context": 35.903337169159954,
+      "median_poverty_rate": 10.794009607233681
+    }
+  ],
+  "dataset_qa": {
+    "feature_count": 17867,
+    "measured_count": 14275,
+    "estimated_count": 3592,
+    "unverified_count": 0,
+    "suspect_zero_count": 546,
+    "fema_matched_count": 17866,
+    "fema_bfe_count": 3635
+  },
+  "source_notes": {
+    "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter API.",
+    "flood_dataset": "App screening dataset built from NYC BES, NYC Building Footprints, and FEMA NFHL.",
+    "screening_caveat": "Building-level results are presentation screening indicators, not certified engineering, insurance, or code-compliance determinations."
+  }
+}
