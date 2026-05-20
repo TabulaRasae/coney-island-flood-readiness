@@ -1,0 +1,5 @@
+{
+  "model_version": "flood-context-v2",
+  "current_freeboard_ft": 2.0,
+  "basis": "Presentation screening compares trusted measured or clearly estimated first-floor height above grade against effective FEMA BFE above footprint ground elevation. Current screening adds 2 ft freeboard. This is not a certified flood-code, insurance, or elevation-certificate determination."
+}

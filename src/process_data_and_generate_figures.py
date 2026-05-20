@@ -13,14 +13,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import requests
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Polygon as MplPolygon, Rectangle
+from matplotlib.patches import Polygon as MplPolygon
+from shapely.geometry import Point, box, mapping, shape
+from shapely.ops import unary_union
+from shapely.prepared import prep
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = ROOT / "data" / "config" / "sources.json"
 BUILDINGS_PATH = ROOT / "data" / "processed" / "coney-island-buildings.geojson"
 METADATA_PATH = ROOT / "data" / "processed" / "coney-island-buildings.metadata.json"
 FIGURE_DIR = ROOT / "output" / "figures"
 DATA_DIR = ROOT / "data" / "summary"
+
+SOURCE_CONFIG = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+APP_BBOX = SOURCE_CONFIG["area"]["bbox_wgs84"]
+STUDY_BOUNDARY_CONFIG = SOURCE_CONFIG["area"]["study_boundary"]
+NYC_NTA_QUERY_URL = SOURCE_CONFIG["sources"]["nyc_neighborhood_tabulation_areas_2020"]["url"]
 
 CENSUS_REPORTER_GEO_URL = "https://api.censusreporter.org/1.0/geo/show/tiger2024"
 CENSUS_REPORTER_DATA_URL = "https://api.censusreporter.org/1.0/data/show/acs2024_5yr"
@@ -35,12 +44,6 @@ ACS_TABLES = [
     "B25064",  # Median gross rent
 ]
 
-APP_BBOX = {
-    "west": -73.999,
-    "south": 40.565,
-    "east": -73.930,
-    "north": 40.595,
-}
 MAP_CENTER = (
     (APP_BBOX["west"] + APP_BBOX["east"]) / 2,
     (APP_BBOX["south"] + APP_BBOX["north"]) / 2,
@@ -151,51 +154,34 @@ def geometry_centroid(geometry: dict[str, Any] | None) -> tuple[float, float] | 
     return None
 
 
-def point_in_ring(lon: float, lat: float, ring: list[list[float]]) -> bool:
-    inside = False
-    previous_lon, previous_lat = ring[-1][:2]
-    for point in ring:
-        current_lon, current_lat = point[:2]
-        intersects = (current_lat > lat) != (previous_lat > lat)
-        if intersects:
-            projected_lon = (previous_lon - current_lon) * (lat - current_lat) / (
-                previous_lat - current_lat
-            ) + current_lon
-            if lon < projected_lon:
-                inside = not inside
-        previous_lon, previous_lat = current_lon, current_lat
-    return inside
+def bbox_polygon(bbox: dict[str, float]):
+    return box(bbox["west"], bbox["south"], bbox["east"], bbox["north"])
 
 
-def point_in_polygon(lon: float, lat: float, polygon: list[list[list[float]]]) -> bool:
-    if not polygon or not point_in_ring(lon, lat, polygon[0]):
-        return False
-    return not any(point_in_ring(lon, lat, hole) for hole in polygon[1:])
-
-
-def point_in_geometry(point: tuple[float, float], geometry: dict[str, Any] | None) -> bool:
-    if not geometry:
-        return False
-    lon, lat = point
-    geometry_type = geometry.get("type")
-    coordinates = geometry.get("coordinates") or []
-    if geometry_type == "Polygon":
-        return point_in_polygon(lon, lat, coordinates)
-    if geometry_type == "MultiPolygon":
-        return any(point_in_polygon(lon, lat, polygon) for polygon in coordinates)
-    return False
-
-
-def bbox_intersects(a: tuple[float, float, float, float] | None, b: dict[str, float]) -> bool:
-    if a is None:
-        return False
-    west, south, east, north = a
-    return not (
-        east < b["west"]
-        or west > b["east"]
-        or north < b["south"]
-        or south > b["north"]
+def load_study_boundary() -> tuple[Any, list[dict[str, Any]]]:
+    nta_codes = STUDY_BOUNDARY_CONFIG["nta2020_codes"]
+    quoted_codes = ",".join(f"'{code}'" for code in nta_codes)
+    collection = request_json(
+        NYC_NTA_QUERY_URL,
+        {
+            "f": "geojson",
+            "where": f"NTA2020 IN ({quoted_codes})",
+            "outFields": "NTA2020,NTAName,BoroName,CDTA2020,CDTAName",
+            "outSR": 4326,
+            "returnGeometry": "true",
+        },
     )
+    features = collection.get("features", [])
+    found_codes = {feature.get("properties", {}).get("NTA2020") for feature in features}
+    missing_codes = sorted(set(nta_codes) - found_codes)
+    if missing_codes:
+        raise ValueError(f"Missing NTA study-boundary features: {missing_codes}")
+
+    boundary = unary_union([shape(feature["geometry"]) for feature in features])
+    boundary = boundary.intersection(bbox_polygon(APP_BBOX))
+    if boundary.is_empty:
+        raise ValueError("Configured study boundary does not intersect the screening bbox")
+    return boundary, features
 
 
 def project_point(point: list[float] | tuple[float, float]) -> tuple[float, float]:
@@ -206,80 +192,21 @@ def project_point(point: list[float] | tuple[float, float]) -> tuple[float, floa
     )
 
 
-def project_bbox(bbox: dict[str, float]) -> tuple[float, float, float, float]:
-    west, south = project_point((bbox["west"], bbox["south"]))
-    east, north = project_point((bbox["east"], bbox["north"]))
-    return west, south, east, north
-
-
-def clip_ring_to_bbox(ring: list[list[float]], bbox: dict[str, float]) -> list[list[float]]:
-    points = ring[:-1] if len(ring) > 1 and ring[0][:2] == ring[-1][:2] else ring[:]
-
-    def clip_edge(
-        input_points: list[list[float]],
-        inside,
-        intersect,
-    ) -> list[list[float]]:
-        if not input_points:
-            return []
-        output: list[list[float]] = []
-        previous = input_points[-1]
-        previous_inside = inside(previous)
-        for current in input_points:
-            current_inside = inside(current)
-            if current_inside:
-                if not previous_inside:
-                    output.append(intersect(previous, current))
-                output.append(current)
-            elif previous_inside:
-                output.append(intersect(previous, current))
-            previous = current
-            previous_inside = current_inside
-        return output
-
-    def intersect_vertical(x_value: float):
-        def _intersect(start: list[float], end: list[float]) -> list[float]:
-            x1, y1 = start[:2]
-            x2, y2 = end[:2]
-            if x2 == x1:
-                return [x_value, y1]
-            ratio = (x_value - x1) / (x2 - x1)
-            return [x_value, y1 + ratio * (y2 - y1)]
-
-        return _intersect
-
-    def intersect_horizontal(y_value: float):
-        def _intersect(start: list[float], end: list[float]) -> list[float]:
-            x1, y1 = start[:2]
-            x2, y2 = end[:2]
-            if y2 == y1:
-                return [x1, y_value]
-            ratio = (y_value - y1) / (y2 - y1)
-            return [x1 + ratio * (x2 - x1), y_value]
-
-        return _intersect
-
-    clipped = clip_edge(points, lambda point: point[0] >= bbox["west"], intersect_vertical(bbox["west"]))
-    clipped = clip_edge(clipped, lambda point: point[0] <= bbox["east"], intersect_vertical(bbox["east"]))
-    clipped = clip_edge(clipped, lambda point: point[1] >= bbox["south"], intersect_horizontal(bbox["south"]))
-    clipped = clip_edge(clipped, lambda point: point[1] <= bbox["north"], intersect_horizontal(bbox["north"]))
-    if len(clipped) < 3:
-        return []
-    clipped.append(clipped[0])
-    return clipped
-
-
-def load_census_tracts() -> list[dict[str, Any]]:
+def load_census_tracts(study_boundary: Any) -> list[dict[str, Any]]:
     collection = request_json(
         CENSUS_REPORTER_GEO_URL,
         {"geo_ids": f"140|{TRACT_PARENT}"},
     )
     tracts = []
     for feature in collection["features"]:
-        bbox = geometry_bbox(feature.get("geometry"))
-        if bbox_intersects(bbox, APP_BBOX):
-            feature["_bbox"] = bbox
-            tracts.append(feature)
+        tract_shape = shape(feature.get("geometry"))
+        plot_shape = tract_shape.intersection(study_boundary)
+        if plot_shape.is_empty:
+            continue
+        feature["_shape"] = tract_shape
+        feature["_plot_shape"] = plot_shape
+        feature["_bbox"] = geometry_bbox(mapping(tract_shape))
+        tracts.append(feature)
     return tracts
 
 
@@ -361,16 +288,22 @@ def extract_demographics(tract: dict[str, Any], acs: dict[str, Any]) -> dict[str
 def assign_buildings_to_tracts(
     buildings: list[dict[str, Any]],
     tracts: list[dict[str, Any]],
+    study_boundary: Any,
 ) -> dict[str, list[dict[str, Any]]]:
     assignments: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    prepared_boundary = prep(study_boundary)
     for building in buildings:
         point = geometry_centroid(building.get("geometry"))
         if point is None:
             continue
+        building_point = Point(point[0], point[1])
+        if not prepared_boundary.covers(building_point):
+            continue
         for tract in tracts:
             if not bbox_contains_point(tract.get("_bbox"), point):
                 continue
-            if point_in_geometry(point, tract.get("geometry")):
+            tract_shape = tract.get("_shape")
+            if tract_shape is not None and tract_shape.covers(building_point):
                 assignments[tract["properties"]["geoid"]].append(building)
                 break
     return assignments
@@ -402,41 +335,42 @@ def building_metrics(features: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def tract_patch(feature: dict[str, Any]) -> list[MplPolygon]:
-    geometry = feature.get("geometry") or {}
-    coords = geometry.get("coordinates") or []
+def geometry_patches(geometry: Any) -> list[MplPolygon]:
     patches: list[MplPolygon] = []
-    if geometry.get("type") == "Polygon":
-        clipped = clip_ring_to_bbox(coords[0], APP_BBOX)
-        if clipped:
-            patches.append(MplPolygon([project_point(point) for point in clipped], closed=True))
-    elif geometry.get("type") == "MultiPolygon":
-        for polygon in coords:
-            if polygon and polygon[0]:
-                clipped = clip_ring_to_bbox(polygon[0], APP_BBOX)
-                if clipped:
-                    patches.append(MplPolygon([project_point(point) for point in clipped], closed=True))
+    if geometry is None or geometry.is_empty:
+        return patches
+    if geometry.geom_type == "Polygon":
+        patches.append(MplPolygon([project_point(point) for point in geometry.exterior.coords], closed=True))
+    elif geometry.geom_type == "MultiPolygon":
+        for polygon in geometry.geoms:
+            if not polygon.is_empty:
+                patches.append(MplPolygon([project_point(point) for point in polygon.exterior.coords], closed=True))
+    elif geometry.geom_type == "GeometryCollection":
+        for part in geometry.geoms:
+            patches.extend(geometry_patches(part))
     return patches
 
 
-def add_screening_context(ax: plt.Axes) -> None:
-    west, south, east, north = project_bbox(APP_BBOX)
-    ax.add_patch(
-        Rectangle(
-            (west, south),
-            east - west,
-            north - south,
-            fill=False,
-            linestyle=(0, (4, 3)),
-            linewidth=1.2,
-            edgecolor="#222222",
-            zorder=3,
+def tract_patch(feature: dict[str, Any]) -> list[MplPolygon]:
+    return geometry_patches(feature.get("_plot_shape"))
+
+
+def add_study_boundary_context(ax: plt.Axes, study_boundary: Any) -> None:
+    boundary_patches = geometry_patches(study_boundary)
+    if boundary_patches:
+        ax.add_collection(
+            PatchCollection(
+                boundary_patches,
+                facecolor="none",
+                edgecolor="#7A1E14",
+                linewidth=1.5,
+                zorder=4,
+            )
         )
-    )
     ax.text(
         0.02,
         0.04,
-        "Census tract portions\nclipped to screening box\nnot ZIP codes",
+        "Tracts clipped to\nNTA-based study boundary\nnot ZIP codes",
         transform=ax.transAxes,
         fontsize=7.5,
         color="#333333",
@@ -444,10 +378,11 @@ def add_screening_context(ax: plt.Axes) -> None:
     )
     labels = [
         ("Sea Gate", -73.997, 40.576),
-        ("Coney Island", -73.982, 40.575),
-        ("Brighton Beach", -73.960, 40.577),
+        ("Coney Island", -73.982, 40.574),
+        ("Brighton Beach", -73.958, 40.578),
+        ("Manhattan Beach", -73.943, 40.579),
         ("Atlantic Ocean", -73.965, 40.567),
-        ("Coney Island Creek", -73.975, 40.592),
+        ("Coney Island Creek", -73.977, 40.589),
     ]
     for label, lon, lat in labels:
         x, y = project_point((lon, lat))
@@ -458,6 +393,7 @@ def add_choropleth(
     ax: plt.Axes,
     tracts: list[dict[str, Any]],
     values: dict[str, float | None],
+    study_boundary: Any,
     title: str,
     cmap: str,
     legend_label: str,
@@ -481,28 +417,27 @@ def add_choropleth(
     )
     collection.set_array(np.asarray(patch_values))
     ax.add_collection(collection)
-    west, south, east, north = project_bbox(APP_BBOX)
+    west_lon, south_lat, east_lon, north_lat = study_boundary.bounds
+    west, south = project_point((west_lon, south_lat))
+    east, north = project_point((east_lon, north_lat))
     margin_x = (east - west) * 0.03
-    margin_y = (north - south) * 0.05
+    margin_y = (north - south) * 0.12
     ax.set_xlim(west - margin_x, east + margin_x)
     ax.set_ylim(south - margin_y, north + margin_y)
     ax.set_aspect("equal", adjustable="box")
+    ax.set_facecolor("#D9EDF2")
     ax.set_title(title, fontsize=13, pad=10, weight="bold")
     ax.set_xticks([])
     ax.set_yticks([])
     for spine in ax.spines.values():
         spine.set_visible(False)
-    add_screening_context(ax)
+    add_study_boundary_context(ax, study_boundary)
     cbar = plt.colorbar(collection, ax=ax, fraction=0.045, pad=0.02)
     cbar.ax.tick_params(labelsize=9)
     if money:
         cbar.formatter = plt.FuncFormatter(lambda x, _: f"${x/1000:.0f}k")
         cbar.update_ticks()
     cbar.set_label(legend_label, fontsize=9)
-
-
-def format_money(value: float | None) -> str:
-    return "n/a" if value is None else f"${value:,.0f}"
 
 
 def format_pct(value: float | None) -> str:
@@ -529,7 +464,7 @@ def write_outputs(rows: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
         "estimated_vulnerable_count",
     ]
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field) for field in fieldnames})
@@ -575,7 +510,7 @@ def income_tiers(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return tiers
 
 
-def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
+def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]], study_boundary: Any) -> None:
     row_by_geoid = {row["geoid"]: row for row in rows}
     income_values = {
         geoid: row.get("median_household_income")
@@ -589,11 +524,13 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
     }
     mapped_tracts = [tract for tract in tracts if tract["properties"]["geoid"] in income_values]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5.8), constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.4), constrained_layout=False)
+    fig.subplots_adjust(left=0.035, right=0.965, top=0.78, bottom=0.18, wspace=0.18)
     add_choropleth(
         axes[0],
         mapped_tracts,
         income_values,
+        study_boundary,
         "Median household income",
         "YlGnBu",
         "ACS 2024 dollars",
@@ -603,20 +540,21 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
         axes[1],
         mapped_tracts,
         vulnerable_values,
+        study_boundary,
         "Below-BFE building share",
         "OrRd",
         "% of buildings with BFE context",
         money=False,
     )
     fig.suptitle(
-        "Coney Island Screening Box: Census Tract Context for Income and Flood-Elevation Vulnerability",
+        "Coney Island Peninsula: Income and Flood-Elevation Vulnerability by Census Tract",
         fontsize=13,
         weight="bold",
     )
     fig.text(
         0.5,
-        0.01,
-        "Map units are census tract portions clipped to the building-screening bbox. They are not ZIP codes, parcel boundaries, or photo frames. Sources: ACS 2024 5-year tract estimates; NYC BES; NYC Building Footprints; FEMA NFHL.",
+        0.035,
+        "Map units are ACS census tracts intersected with the project study boundary, built from NYC 2020 NTA polygons and clipped to the screening area. It is not a Google place boundary, ZIP-code map, or parcel map. Sources: ACS 2024 5-year estimates; NYC BES; NYC Building Footprints; FEMA NFHL; NYC 2020 NTAs.",
         ha="center",
         fontsize=8.4,
         color="#444444",
@@ -806,6 +744,12 @@ def aggregate_context(rows: list[dict[str, Any]], tiers: list[dict[str, Any]], m
     highest_vulnerability = max(rows, key=lambda row: row.get("vulnerable_count") or 0)
     return {
         "app_bbox": APP_BBOX,
+        "study_boundary": {
+            "name": STUDY_BOUNDARY_CONFIG["name"],
+            "basis": STUDY_BOUNDARY_CONFIG["basis"],
+            "nta2020_codes": STUDY_BOUNDARY_CONFIG["nta2020_codes"],
+            "nta2020_names": STUDY_BOUNDARY_CONFIG["nta2020_names"],
+        },
         "tract_count": len(rows),
         "tracts_with_buildings": sum(1 for row in rows if row["building_count"] > 0),
         "population_screening_area_sum": round(population),
@@ -833,6 +777,7 @@ def aggregate_context(rows: list[dict[str, Any]], tiers: list[dict[str, Any]], m
         "source_notes": {
             "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter release acs2024_5yr; tract geometry accessed through Census Reporter TIGER 2024.",
             "flood_dataset": "App screening dataset built from NYC BES, NYC Building Footprints, and FEMA NFHL.",
+            "map_boundary": "Census tracts are intersected with a project study boundary built from official NYC 2020 NTA polygons, then clipped to the screening bbox. The boundary is not a ZIP code, parcel map, or Google place boundary.",
             "screening_caveat": "Building-level results are presentation screening indicators, not certified engineering, insurance, or code-compliance determinations.",
         },
     }
@@ -845,9 +790,10 @@ def main() -> None:
     buildings = json.loads(BUILDINGS_PATH.read_text(encoding="utf-8"))["features"]
     metadata = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
     validate_input_dataset(buildings, metadata)
-    tracts = load_census_tracts()
+    study_boundary, _study_boundary_features = load_study_boundary()
+    tracts = load_census_tracts(study_boundary)
     acs = load_acs([tract["properties"]["geoid"] for tract in tracts])
-    assignments = assign_buildings_to_tracts(buildings, tracts)
+    assignments = assign_buildings_to_tracts(buildings, tracts, study_boundary)
 
     rows: list[dict[str, Any]] = []
     for tract in tracts:
@@ -862,7 +808,7 @@ def main() -> None:
     summary = aggregate_context(rows, tiers, metadata)
 
     write_outputs(rows, summary)
-    plot_maps(tracts, rows)
+    plot_maps(tracts, rows, study_boundary)
     plot_income_tiers(tiers)
     plot_data_methods(metadata)
 

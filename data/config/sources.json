@@ -1,5 +1,4 @@
 {
-  "generated_at": "2026-05-20T00:58:03.476502+00:00",
   "area": {
     "name": "Coney Island screening bbox",
     "bbox_wgs84": {
@@ -11,11 +10,7 @@
     "study_boundary": {
       "name": "Coney Island peninsula study boundary",
       "basis": "NYC 2020 Neighborhood Tabulation Areas intersected with the screening bbox",
-      "nta2020_codes": [
-        "BK1302",
-        "BK1303",
-        "BK1503"
-      ],
+      "nta2020_codes": ["BK1302", "BK1303", "BK1503"],
       "nta2020_names": [
         "Coney Island-Sea Gate",
         "Brighton Beach",
@@ -23,43 +18,6 @@
       ],
       "note": "This is a project study boundary chosen to match the peninsula fieldwork geography. It is not a Google place boundary, ZIP code, parcel boundary, or certified neighborhood definition."
     }
-  },
-  "model_version": "flood-context-v2",
-  "raw_source_counts": {
-    "nyc_bes_records": 14895,
-    "nyc_building_footprints": 17867,
-    "fema_flood_hazard_zone_features": 86,
-    "fema_base_flood_elevation_line_features": 0
-  },
-  "feature_count": 17867,
-  "measured_count": 14275,
-  "estimated_count": 3592,
-  "unverified_count": 0,
-  "suspect_zero_count": 546,
-  "fema_matched_count": 17866,
-  "fema_bfe_count": 3635,
-  "status_counts": {
-    "no_flood_context": 14232,
-    "measured_base_flood_elevation_screening": 560,
-    "estimated_below_base_flood_elevation": 604,
-    "measured_current_standard_screening": 851,
-    "measured_below_base_flood_elevation": 1427,
-    "estimated_base_flood_elevation_screening": 130,
-    "estimated_current_standard_screening": 63
-  },
-  "confidence_counts": {
-    "measured": 14275,
-    "estimated": 3592,
-    "unverified": 0
-  },
-  "qa_counts": {
-    "feature_count": 17867,
-    "measured_count": 14275,
-    "estimated_count": 3592,
-    "unverified_count": 0,
-    "suspect_zero_count": 546,
-    "fema_matched_count": 17866,
-    "fema_bfe_count": 3635
   },
   "sources": {
     "nyc_building_elevation_subgrade": {
