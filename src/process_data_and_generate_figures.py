@@ -533,7 +533,7 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]], study_bo
         study_boundary,
         "Median household income",
         "YlGnBu",
-        "ACS 2024 dollars",
+        "American Community Survey 2024 dollars",
         money=True,
     )
     add_choropleth(
@@ -541,9 +541,9 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]], study_bo
         mapped_tracts,
         vulnerable_values,
         study_boundary,
-        "Below-BFE building share",
+        "Below base flood elevation building share",
         "OrRd",
-        "% of buildings with BFE context",
+        "% of buildings with flood-elevation context",
         money=False,
     )
     fig.text(
@@ -568,11 +568,11 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
     ])
 
     fig, ax1 = plt.subplots(figsize=(10, 6.2))
-    fig.subplots_adjust(left=0.09, right=0.89, top=0.84, bottom=0.24)
+    fig.subplots_adjust(left=0.1, right=0.88, top=0.82, bottom=0.24)
     x = np.arange(len(labels))
-    ax1.bar(x, measured, color="#2F6F88", label="Measured below BFE")
-    ax1.bar(x, estimated, bottom=measured, color="#E7A23B", label="Estimated below BFE")
-    ax1.set_ylabel("Below-BFE building count", fontsize=11)
+    ax1.bar(x, measured, color="#2F6F88", label="Measured values")
+    ax1.bar(x, estimated, bottom=measured, color="#E7A23B", label="Estimated values")
+    ax1.set_ylabel("Buildings below base flood elevation", fontsize=11)
     ax1.set_xticks(x, labels)
     ax1.set_ylim(0, max((measured + estimated).max() * 1.22, 100))
     ax1.legend(loc="upper left", frameon=False)
@@ -580,23 +580,23 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
     ax1.set_axisbelow(True)
 
     ax2 = ax1.twinx()
-    ax2.plot(x, shares, color="#9B1C1C", marker="o", linewidth=2.2, label="Below-BFE share")
-    ax2.set_ylabel("% of BFE-context buildings below BFE", fontsize=11)
+    ax2.plot(x, shares, color="#9B1C1C", marker="o", linewidth=2.2, label="Share below base flood elevation")
+    ax2.set_ylabel("Share below base flood elevation (%)", fontsize=11)
     ax2.set_ylim(0, max(100, shares.max() * 1.2 if len(shares) else 100))
 
     for index, tier in enumerate(tiers):
         ax1.text(
             index,
-            measured[index] + estimated[index] + 25,
-            f"MHI {tier['income_min']/1000:.0f}k-{tier['income_max']/1000:.0f}k\n{format_pct(tier['median_poverty_rate'])} poverty",
+            measured[index] + estimated[index] + 35,
+            f"Income {tier['income_min']/1000:.0f}k-{tier['income_max']/1000:.0f}k\n{format_pct(tier['median_poverty_rate'])} poverty",
             ha="center",
             va="bottom",
-            fontsize=8,
+            fontsize=7.5,
             color="#333333",
         )
 
     ax1.set_title(
-        "Flood-Elevation Vulnerability by Tract Income Tier",
+        "Buildings Below Base Flood Elevation by Tract Income Tier",
         fontsize=14,
         weight="bold",
         pad=14,
@@ -604,7 +604,7 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
     fig.text(
         0.5,
         0.01,
-        "Tier labels sort app-area census tracts by ACS 2024 median household income. Estimates remain screening indicators, not compliance findings.",
+        "Tier labels sort app-area census tracts by American Community Survey 2024 median household income. Estimates remain screening indicators, not compliance findings.",
         ha="center",
         fontsize=9,
         color="#444444",
@@ -615,11 +615,11 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
 
 def plot_data_methods(metadata: dict[str, Any]) -> None:
     labels = [
-        "Measured\nBES-derived",
+        "Measured\ncity elevation data",
         "Estimated\nofficial-data fallback",
         "Unverified",
-        "Suspect BES\n0/0 records",
-        "FEMA BFE\ncontext",
+        "Suspect city elevation\n0/0 records",
+        "Federal flood map\nbase elevation context",
     ]
     values = [
         metadata["qa_counts"]["measured_count"],
@@ -651,7 +651,7 @@ def plot_data_methods(metadata: dict[str, Any]) -> None:
     ax.text(
         0.5,
         -0.18,
-        "Trusted display fields suppress suspect BES 0/0 elevations; estimated values are labeled separately from measured values.",
+        "Trusted display fields suppress suspect Building Elevation and Subgrade 0/0 values; estimated values are labeled separately from measured values.",
         transform=ax.transAxes,
         ha="center",
         fontsize=9,
@@ -770,9 +770,9 @@ def aggregate_context(rows: list[dict[str, Any]], tiers: list[dict[str, Any]], m
         "income_tiers": tiers,
         "dataset_qa": metadata["qa_counts"],
         "source_notes": {
-            "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter release acs2024_5yr; tract geometry accessed through Census Reporter TIGER 2024.",
-            "flood_dataset": "App screening dataset built from NYC BES, NYC Building Footprints, and FEMA NFHL.",
-            "map_boundary": "Census tracts are intersected with a project study boundary built from official NYC 2020 NTA polygons, then clipped to the screening bbox. The boundary is not a ZIP code, parcel map, or Google place boundary.",
+            "acs": "American Community Survey 2024 5-year tract estimates accessed through Census Reporter release acs2024_5yr; tract geometry accessed through Census Reporter TIGER 2024.",
+            "flood_dataset": "App screening dataset built from New York City Building Elevation and Subgrade, New York City Building Footprints, and Federal Emergency Management Agency National Flood Hazard Layer data.",
+            "map_boundary": "Census tracts are intersected with a project study boundary built from official New York City 2020 Neighborhood Tabulation Area polygons, then clipped to the screening bbox. The boundary is not a ZIP code, parcel map, or Google place boundary.",
             "screening_caveat": "Building-level results are presentation screening indicators, not certified engineering, insurance, or code-compliance determinations.",
         },
     }

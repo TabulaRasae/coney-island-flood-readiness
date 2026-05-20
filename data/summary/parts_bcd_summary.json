@@ -123,9 +123,9 @@
     "fema_bfe_count": 3635
   },
   "source_notes": {
-    "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter release acs2024_5yr; tract geometry accessed through Census Reporter TIGER 2024.",
-    "flood_dataset": "App screening dataset built from NYC BES, NYC Building Footprints, and FEMA NFHL.",
-    "map_boundary": "Census tracts are intersected with a project study boundary built from official NYC 2020 NTA polygons, then clipped to the screening bbox. The boundary is not a ZIP code, parcel map, or Google place boundary.",
+    "acs": "American Community Survey 2024 5-year tract estimates accessed through Census Reporter release acs2024_5yr; tract geometry accessed through Census Reporter TIGER 2024.",
+    "flood_dataset": "App screening dataset built from New York City Building Elevation and Subgrade, New York City Building Footprints, and Federal Emergency Management Agency National Flood Hazard Layer data.",
+    "map_boundary": "Census tracts are intersected with a project study boundary built from official New York City 2020 Neighborhood Tabulation Area polygons, then clipped to the screening bbox. The boundary is not a ZIP code, parcel map, or Google place boundary.",
     "screening_caveat": "Building-level results are presentation screening indicators, not certified engineering, insurance, or code-compliance determinations."
   }
 }
