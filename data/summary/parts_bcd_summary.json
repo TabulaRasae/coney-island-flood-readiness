@@ -6,7 +6,7 @@
     "north": 40.595
   },
   "study_boundary": {
-    "name": "Coney Island peninsula study boundary",
+    "name": "Coney Island coastal study boundary",
     "basis": "NYC 2020 Neighborhood Tabulation Areas intersected with the screening bbox",
     "nta2020_codes": [
       "BK1302",

@@ -367,26 +367,26 @@ def add_study_boundary_context(ax: plt.Axes, study_boundary: Any) -> None:
                 zorder=4,
             )
         )
-    ax.text(
-        0.02,
-        0.04,
-        "Tracts clipped to\nNTA-based study boundary\nnot ZIP codes",
-        transform=ax.transAxes,
-        fontsize=7.5,
-        color="#333333",
-        bbox={"facecolor": "white", "edgecolor": "#888888", "alpha": 0.82, "pad": 3},
-    )
     labels = [
-        ("Sea Gate", -73.997, 40.576),
+        ("Sea Gate", -73.9948, 40.576),
         ("Coney Island", -73.982, 40.574),
         ("Brighton Beach", -73.958, 40.578),
         ("Manhattan Beach", -73.943, 40.579),
-        ("Atlantic Ocean", -73.965, 40.567),
         ("Coney Island Creek", -73.977, 40.589),
     ]
     for label, lon, lat in labels:
         x, y = project_point((lon, lat))
-        ax.text(x, y, label, fontsize=7, color="#4a4a4a", ha="center", va="center", alpha=0.86)
+        ax.text(
+            x,
+            y,
+            label,
+            fontsize=7,
+            color="#333333",
+            ha="center",
+            va="center",
+            alpha=0.9,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.52, "pad": 1.2},
+        )
 
 
 def add_choropleth(
@@ -420,24 +420,24 @@ def add_choropleth(
     west_lon, south_lat, east_lon, north_lat = study_boundary.bounds
     west, south = project_point((west_lon, south_lat))
     east, north = project_point((east_lon, north_lat))
-    margin_x = (east - west) * 0.03
-    margin_y = (north - south) * 0.12
+    margin_x = (east - west) * 0.01
+    margin_y = (north - south) * 0.04
     ax.set_xlim(west - margin_x, east + margin_x)
     ax.set_ylim(south - margin_y, north + margin_y)
     ax.set_aspect("equal", adjustable="box")
     ax.set_facecolor("#D9EDF2")
-    ax.set_title(title, fontsize=13, pad=10, weight="bold")
+    ax.set_title(title, fontsize=12, pad=4, weight="bold")
     ax.set_xticks([])
     ax.set_yticks([])
     for spine in ax.spines.values():
         spine.set_visible(False)
     add_study_boundary_context(ax, study_boundary)
-    cbar = plt.colorbar(collection, ax=ax, fraction=0.045, pad=0.02)
-    cbar.ax.tick_params(labelsize=9)
+    cbar = plt.colorbar(collection, ax=ax, fraction=0.025, pad=0.012)
+    cbar.ax.tick_params(labelsize=8)
     if money:
         cbar.formatter = plt.FuncFormatter(lambda x, _: f"${x/1000:.0f}k")
         cbar.update_ticks()
-    cbar.set_label(legend_label, fontsize=9)
+    cbar.set_label(legend_label, fontsize=8)
 
 
 def format_pct(value: float | None) -> str:
@@ -524,8 +524,8 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]], study_bo
     }
     mapped_tracts = [tract for tract in tracts if tract["properties"]["geoid"] in income_values]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.4), constrained_layout=False)
-    fig.subplots_adjust(left=0.035, right=0.965, top=0.78, bottom=0.18, wspace=0.18)
+    fig, axes = plt.subplots(2, 1, figsize=(8.0, 8.0), constrained_layout=False)
+    fig.subplots_adjust(left=0.02, right=0.94, top=0.97, bottom=0.075, hspace=0.11)
     add_choropleth(
         axes[0],
         mapped_tracts,
@@ -546,17 +546,12 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]], study_bo
         "% of buildings with BFE context",
         money=False,
     )
-    fig.suptitle(
-        "Coney Island Peninsula: Income and Flood-Elevation Vulnerability by Census Tract",
-        fontsize=13,
-        weight="bold",
-    )
     fig.text(
         0.5,
-        0.035,
-        "Map units are ACS census tracts intersected with the project study boundary, built from NYC 2020 NTA polygons and clipped to the screening area. It is not a Google place boundary, ZIP-code map, or parcel map. Sources: ACS 2024 5-year estimates; NYC BES; NYC Building Footprints; FEMA NFHL; NYC 2020 NTAs.",
+        0.025,
+        "Census tracts are clipped to the project study boundary; this is not a ZIP-code, parcel, or Google place-boundary map.",
         ha="center",
-        fontsize=8.4,
+        fontsize=7.6,
         color="#444444",
     )
     fig.savefig(FIGURE_DIR / "fig_income_vs_vulnerability_maps.png", dpi=240, bbox_inches="tight")

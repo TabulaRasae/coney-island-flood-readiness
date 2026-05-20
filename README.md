@@ -75,7 +75,7 @@ The generated files are:
 
 - The project study boundary uses official NYC 2020 NTA polygons for Coney Island-Sea Gate, Brighton Beach, and the bbox-intersecting part of Sheepshead Bay-Manhattan Beach-Gerritsen Beach.
 - TIGER 2024 census tracts are selected when they intersect that study boundary.
-- Displayed tract geometry is intersected with the NTA-based study boundary so the map follows the Coney Island peninsula context instead of a rectangular bbox.
+- Displayed tract geometry is intersected with the NTA-based coastal study boundary so the map follows the Coney Island, Brighton Beach, and Manhattan Beach context instead of a rectangular bbox.
 - Tract colors show tract-level ACS income and tract-level below-BFE share for buildings assigned to each tract.
 - The map is projected into local miles before plotting so the east-west and north-south proportions are not distorted by raw longitude/latitude degrees.
 
