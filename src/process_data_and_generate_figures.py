@@ -525,7 +525,7 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]], study_bo
     mapped_tracts = [tract for tract in tracts if tract["properties"]["geoid"] in income_values]
 
     fig, axes = plt.subplots(2, 1, figsize=(8.0, 8.0), constrained_layout=False)
-    fig.subplots_adjust(left=0.02, right=0.94, top=0.97, bottom=0.075, hspace=0.11)
+    fig.subplots_adjust(left=0.02, right=0.94, top=0.97, bottom=0.035, hspace=0.11)
     add_choropleth(
         axes[0],
         mapped_tracts,
@@ -546,14 +546,6 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]], study_bo
         "% of buildings with flood-elevation context",
         money=False,
     )
-    fig.text(
-        0.5,
-        0.025,
-        "Census tracts are clipped to the project study boundary; this is not a ZIP-code, parcel, or Google place-boundary map.",
-        ha="center",
-        fontsize=7.6,
-        color="#444444",
-    )
     fig.savefig(FIGURE_DIR / "fig_income_vs_vulnerability_maps.png", dpi=240, bbox_inches="tight")
     plt.close(fig)
 
@@ -568,7 +560,7 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
     ])
 
     fig, ax1 = plt.subplots(figsize=(10, 6.2))
-    fig.subplots_adjust(left=0.1, right=0.88, top=0.82, bottom=0.24)
+    fig.subplots_adjust(left=0.1, right=0.88, top=0.82, bottom=0.16)
     x = np.arange(len(labels))
     ax1.bar(x, measured, color="#2F6F88", label="Measured values")
     ax1.bar(x, estimated, bottom=measured, color="#E7A23B", label="Estimated values")
@@ -600,14 +592,6 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
         fontsize=14,
         weight="bold",
         pad=14,
-    )
-    fig.text(
-        0.5,
-        0.01,
-        "Tier labels sort app-area census tracts by American Community Survey 2024 median household income. Estimates remain screening indicators, not compliance findings.",
-        ha="center",
-        fontsize=9,
-        color="#444444",
     )
     fig.savefig(FIGURE_DIR / "fig_income_tier_vulnerability.png", dpi=240, bbox_inches="tight")
     plt.close(fig)
