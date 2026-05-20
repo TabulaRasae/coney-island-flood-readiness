@@ -23,7 +23,8 @@ FIGURE_DIR = ROOT / "output" / "figures"
 DATA_DIR = ROOT / "data" / "summary"
 
 CENSUS_REPORTER_GEO_URL = "https://api.censusreporter.org/1.0/geo/show/tiger2024"
-CENSUS_REPORTER_DATA_URL = "https://api.censusreporter.org/1.0/data/show/latest"
+CENSUS_REPORTER_DATA_URL = "https://api.censusreporter.org/1.0/data/show/acs2024_5yr"
+ACS_RELEASE_ID = "acs2024_5yr"
 TRACT_PARENT = "05000US36047"
 ACS_TABLES = [
     "B01003",  # Total population
@@ -50,7 +51,11 @@ VULNERABLE_STATUSES = {
 def request_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
     response = requests.get(url, params=params, timeout=90)
     response.raise_for_status()
-    return response.json()
+    try:
+        return response.json()
+    except ValueError as exc:
+        preview = response.text[:500].replace("\n", " ")
+        raise RuntimeError(f"Expected JSON from {response.url}; got: {preview}") from exc
 
 
 def iter_geometry_points(geometry: dict[str, Any] | None) -> list[list[float]]:
@@ -202,7 +207,9 @@ def load_census_tracts() -> list[dict[str, Any]]:
 
 
 def load_acs(geoids: list[str]) -> dict[str, Any]:
-    # Census Reporter comfortably handles this geoid list in one request.
+    # Use Census Reporter's fixed ACS 2024 release. The official Census API can
+    # require a key from some networks; this endpoint keeps the repo reproducible
+    # without a private credential while still pinning the ACS vintage.
     payload = request_json(
         CENSUS_REPORTER_DATA_URL,
         {
@@ -210,6 +217,12 @@ def load_acs(geoids: list[str]) -> dict[str, Any]:
             "geo_ids": ",".join(geoids),
         },
     )
+    release_id = payload.get("release", {}).get("id")
+    if release_id != ACS_RELEASE_ID:
+        raise ValueError(f"Expected Census Reporter release {ACS_RELEASE_ID}, got {release_id!r}")
+    missing = sorted(set(geoids) - set(payload.get("data", {})))
+    if missing:
+        raise ValueError(f"ACS 2024 response did not include {len(missing)} requested tracts: {missing[:5]}")
     return payload
 
 
@@ -594,6 +607,57 @@ def plot_data_methods(metadata: dict[str, Any]) -> None:
     plt.close(fig)
 
 
+def validate_input_dataset(buildings: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+    metadata_qa = metadata.get("qa_counts", {})
+    feature_count = len(buildings)
+    confidence_counts = Counter(
+        feature["properties"].get("elevation_confidence")
+        for feature in buildings
+    )
+    suspect_zero_count = sum(
+        1
+        for feature in buildings
+        if "suspect_zero_elevation" in (feature["properties"].get("data_quality_flags") or [])
+    )
+    fema_matched_count = sum(
+        1
+        for feature in buildings
+        if feature["properties"].get("flood_zone") is not None
+    )
+    fema_bfe_count = sum(
+        1
+        for feature in buildings
+        if feature["properties"].get("base_flood_elevation_ft") is not None
+    )
+    trusted_suspect_zero = [
+        feature["properties"].get("bin") or feature["properties"].get("bbl")
+        for feature in buildings
+        if "suspect_zero_elevation" in (feature["properties"].get("data_quality_flags") or [])
+        and feature["properties"].get("elevation_confidence") == "measured"
+    ]
+    expected = {
+        "feature_count": feature_count,
+        "measured_count": confidence_counts["measured"],
+        "estimated_count": confidence_counts["estimated"],
+        "unverified_count": confidence_counts["unverified"],
+        "suspect_zero_count": suspect_zero_count,
+        "fema_matched_count": fema_matched_count,
+        "fema_bfe_count": fema_bfe_count,
+    }
+    mismatches = {
+        key: {"metadata": metadata_qa.get(key), "computed": value}
+        for key, value in expected.items()
+        if metadata_qa.get(key) != value
+    }
+    if mismatches:
+        raise ValueError(f"Metadata QA counts do not match building features: {mismatches}")
+    if trusted_suspect_zero:
+        raise ValueError(
+            "Suspect BES 0/0 records are incorrectly labeled measured: "
+            f"{trusted_suspect_zero[:10]}"
+        )
+
+
 def aggregate_context(rows: list[dict[str, Any]], tiers: list[dict[str, Any]], metadata: dict[str, Any]) -> dict[str, Any]:
     population = sum(row["population"] or 0 for row in rows)
     poverty_count = sum(row["poverty_count"] or 0 for row in rows)
@@ -646,7 +710,7 @@ def aggregate_context(rows: list[dict[str, Any]], tiers: list[dict[str, Any]], m
         "income_tiers": tiers,
         "dataset_qa": metadata["qa_counts"],
         "source_notes": {
-            "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter API.",
+            "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter release acs2024_5yr; tract geometry accessed through Census Reporter TIGER 2024.",
             "flood_dataset": "App screening dataset built from NYC BES, NYC Building Footprints, and FEMA NFHL.",
             "screening_caveat": "Building-level results are presentation screening indicators, not certified engineering, insurance, or code-compliance determinations.",
         },
@@ -659,6 +723,7 @@ def main() -> None:
 
     buildings = json.loads(BUILDINGS_PATH.read_text(encoding="utf-8"))["features"]
     metadata = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
+    validate_input_dataset(buildings, metadata)
     tracts = load_census_tracts()
     acs = load_acs([tract["properties"]["geoid"] for tract in tracts])
     assignments = assign_buildings_to_tracts(buildings, tracts)

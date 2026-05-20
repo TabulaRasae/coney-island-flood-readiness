@@ -109,7 +109,7 @@
     "fema_bfe_count": 3635
   },
   "source_notes": {
-    "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter API.",
+    "acs": "ACS 2024 5-year tract estimates accessed through Census Reporter release acs2024_5yr; tract geometry accessed through Census Reporter TIGER 2024.",
     "flood_dataset": "App screening dataset built from NYC BES, NYC Building Footprints, and FEMA NFHL.",
     "screening_caveat": "Building-level results are presentation screening indicators, not certified engineering, insurance, or code-compliance determinations."
   }
