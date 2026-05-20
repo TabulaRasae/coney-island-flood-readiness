@@ -562,11 +562,13 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
     fig, ax1 = plt.subplots(figsize=(10, 6.2))
     fig.subplots_adjust(left=0.1, right=0.88, top=0.82, bottom=0.16)
     x = np.arange(len(labels))
+    ax1_top = max((measured + estimated).max() * 1.28, 100)
+    ax2_top = max(100, shares.max() * 1.2 if len(shares) else 100)
     ax1.bar(x, measured, color="#2F6F88", label="Measured values")
     ax1.bar(x, estimated, bottom=measured, color="#E7A23B", label="Estimated values")
     ax1.set_ylabel("Buildings below base flood elevation", fontsize=11)
     ax1.set_xticks(x, labels)
-    ax1.set_ylim(0, max((measured + estimated).max() * 1.22, 100))
+    ax1.set_ylim(0, ax1_top)
     ax1.legend(loc="upper left", frameon=False)
     ax1.grid(axis="y", color="#dddddd", linewidth=0.8)
     ax1.set_axisbelow(True)
@@ -574,17 +576,32 @@ def plot_income_tiers(tiers: list[dict[str, Any]]) -> None:
     ax2 = ax1.twinx()
     ax2.plot(x, shares, color="#9B1C1C", marker="o", linewidth=2.2, label="Share below base flood elevation")
     ax2.set_ylabel("Share below base flood elevation (%)", fontsize=11)
-    ax2.set_ylim(0, max(100, shares.max() * 1.2 if len(shares) else 100))
+    ax2.set_ylim(0, ax2_top)
 
     for index, tier in enumerate(tiers):
+        total = measured[index] + estimated[index]
+        label_x = index
+        label_y = total + 38
+        vertical_align = "bottom"
+        if index == 0:
+            label_x += 0.1
+            label_y = total + 54
+        elif index == 3:
+            label_y = total + 54
+        elif index == len(tiers) - 1:
+            label_x -= 0.16
+            label_y = total - 75
+            vertical_align = "center"
         ax1.text(
-            index,
-            measured[index] + estimated[index] + 35,
-            f"Income {tier['income_min']/1000:.0f}k-{tier['income_max']/1000:.0f}k\n{format_pct(tier['median_poverty_rate'])} poverty",
+            label_x,
+            label_y,
+            f"Tract median income:\n\\${tier['income_min']/1000:.0f}k-\\${tier['income_max']/1000:.0f}k\n"
+            f"Median tract poverty rate:\n{format_pct(tier['median_poverty_rate'])}",
             ha="center",
-            va="bottom",
-            fontsize=7.5,
+            va=vertical_align,
+            fontsize=6.25,
             color="#333333",
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.76, "pad": 1.1},
         )
 
     ax1.set_title(
