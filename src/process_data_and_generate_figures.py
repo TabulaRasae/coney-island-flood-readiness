@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import requests
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Polygon as MplPolygon
+from matplotlib.patches import Polygon as MplPolygon, Rectangle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +41,12 @@ APP_BBOX = {
     "east": -73.930,
     "north": 40.595,
 }
+MAP_CENTER = (
+    (APP_BBOX["west"] + APP_BBOX["east"]) / 2,
+    (APP_BBOX["south"] + APP_BBOX["north"]) / 2,
+)
+MILES_PER_LAT_DEGREE = 69.0
+MILES_PER_LON_DEGREE = math.cos(math.radians(MAP_CENTER[1])) * MILES_PER_LAT_DEGREE
 
 VULNERABLE_STATUSES = {
     "measured_below_base_flood_elevation",
@@ -192,6 +198,77 @@ def bbox_intersects(a: tuple[float, float, float, float] | None, b: dict[str, fl
     )
 
 
+def project_point(point: list[float] | tuple[float, float]) -> tuple[float, float]:
+    lon, lat = point[:2]
+    return (
+        (lon - MAP_CENTER[0]) * MILES_PER_LON_DEGREE,
+        (lat - MAP_CENTER[1]) * MILES_PER_LAT_DEGREE,
+    )
+
+
+def project_bbox(bbox: dict[str, float]) -> tuple[float, float, float, float]:
+    west, south = project_point((bbox["west"], bbox["south"]))
+    east, north = project_point((bbox["east"], bbox["north"]))
+    return west, south, east, north
+
+
+def clip_ring_to_bbox(ring: list[list[float]], bbox: dict[str, float]) -> list[list[float]]:
+    points = ring[:-1] if len(ring) > 1 and ring[0][:2] == ring[-1][:2] else ring[:]
+
+    def clip_edge(
+        input_points: list[list[float]],
+        inside,
+        intersect,
+    ) -> list[list[float]]:
+        if not input_points:
+            return []
+        output: list[list[float]] = []
+        previous = input_points[-1]
+        previous_inside = inside(previous)
+        for current in input_points:
+            current_inside = inside(current)
+            if current_inside:
+                if not previous_inside:
+                    output.append(intersect(previous, current))
+                output.append(current)
+            elif previous_inside:
+                output.append(intersect(previous, current))
+            previous = current
+            previous_inside = current_inside
+        return output
+
+    def intersect_vertical(x_value: float):
+        def _intersect(start: list[float], end: list[float]) -> list[float]:
+            x1, y1 = start[:2]
+            x2, y2 = end[:2]
+            if x2 == x1:
+                return [x_value, y1]
+            ratio = (x_value - x1) / (x2 - x1)
+            return [x_value, y1 + ratio * (y2 - y1)]
+
+        return _intersect
+
+    def intersect_horizontal(y_value: float):
+        def _intersect(start: list[float], end: list[float]) -> list[float]:
+            x1, y1 = start[:2]
+            x2, y2 = end[:2]
+            if y2 == y1:
+                return [x1, y_value]
+            ratio = (y_value - y1) / (y2 - y1)
+            return [x1 + ratio * (x2 - x1), y_value]
+
+        return _intersect
+
+    clipped = clip_edge(points, lambda point: point[0] >= bbox["west"], intersect_vertical(bbox["west"]))
+    clipped = clip_edge(clipped, lambda point: point[0] <= bbox["east"], intersect_vertical(bbox["east"]))
+    clipped = clip_edge(clipped, lambda point: point[1] >= bbox["south"], intersect_horizontal(bbox["south"]))
+    clipped = clip_edge(clipped, lambda point: point[1] <= bbox["north"], intersect_horizontal(bbox["north"]))
+    if len(clipped) < 3:
+        return []
+    clipped.append(clipped[0])
+    return clipped
+
+
 def load_census_tracts() -> list[dict[str, Any]]:
     collection = request_json(
         CENSUS_REPORTER_GEO_URL,
@@ -330,12 +407,51 @@ def tract_patch(feature: dict[str, Any]) -> list[MplPolygon]:
     coords = geometry.get("coordinates") or []
     patches: list[MplPolygon] = []
     if geometry.get("type") == "Polygon":
-        patches.append(MplPolygon(coords[0], closed=True))
+        clipped = clip_ring_to_bbox(coords[0], APP_BBOX)
+        if clipped:
+            patches.append(MplPolygon([project_point(point) for point in clipped], closed=True))
     elif geometry.get("type") == "MultiPolygon":
         for polygon in coords:
             if polygon and polygon[0]:
-                patches.append(MplPolygon(polygon[0], closed=True))
+                clipped = clip_ring_to_bbox(polygon[0], APP_BBOX)
+                if clipped:
+                    patches.append(MplPolygon([project_point(point) for point in clipped], closed=True))
     return patches
+
+
+def add_screening_context(ax: plt.Axes) -> None:
+    west, south, east, north = project_bbox(APP_BBOX)
+    ax.add_patch(
+        Rectangle(
+            (west, south),
+            east - west,
+            north - south,
+            fill=False,
+            linestyle=(0, (4, 3)),
+            linewidth=1.2,
+            edgecolor="#222222",
+            zorder=3,
+        )
+    )
+    ax.text(
+        0.02,
+        0.04,
+        "Census tract portions\nclipped to screening box\nnot ZIP codes",
+        transform=ax.transAxes,
+        fontsize=7.5,
+        color="#333333",
+        bbox={"facecolor": "white", "edgecolor": "#888888", "alpha": 0.82, "pad": 3},
+    )
+    labels = [
+        ("Sea Gate", -73.997, 40.576),
+        ("Coney Island", -73.982, 40.575),
+        ("Brighton Beach", -73.960, 40.577),
+        ("Atlantic Ocean", -73.965, 40.567),
+        ("Coney Island Creek", -73.975, 40.592),
+    ]
+    for label, lon, lat in labels:
+        x, y = project_point((lon, lat))
+        ax.text(x, y, label, fontsize=7, color="#4a4a4a", ha="center", va="center", alpha=0.86)
 
 
 def add_choropleth(
@@ -365,13 +481,18 @@ def add_choropleth(
     )
     collection.set_array(np.asarray(patch_values))
     ax.add_collection(collection)
-    ax.autoscale_view()
+    west, south, east, north = project_bbox(APP_BBOX)
+    margin_x = (east - west) * 0.03
+    margin_y = (north - south) * 0.05
+    ax.set_xlim(west - margin_x, east + margin_x)
+    ax.set_ylim(south - margin_y, north + margin_y)
     ax.set_aspect("equal", adjustable="box")
     ax.set_title(title, fontsize=13, pad=10, weight="bold")
     ax.set_xticks([])
     ax.set_yticks([])
     for spine in ax.spines.values():
         spine.set_visible(False)
+    add_screening_context(ax)
     cbar = plt.colorbar(collection, ax=ax, fraction=0.045, pad=0.02)
     cbar.ax.tick_params(labelsize=9)
     if money:
@@ -468,7 +589,7 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
     }
     mapped_tracts = [tract for tract in tracts if tract["properties"]["geoid"] in income_values]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5.6), constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.8), constrained_layout=True)
     add_choropleth(
         axes[0],
         mapped_tracts,
@@ -488,16 +609,16 @@ def plot_maps(tracts: list[dict[str, Any]], rows: list[dict[str, Any]]) -> None:
         money=False,
     )
     fig.suptitle(
-        "Coney Island Screening Area: Income and Flood-Elevation Vulnerability by Census Tract",
+        "Coney Island Screening Box: Census Tract Context for Income and Flood-Elevation Vulnerability",
         fontsize=13,
         weight="bold",
     )
     fig.text(
         0.5,
         0.01,
-        "Sources: ACS 2024 5-year tract estimates; app building screening dataset from NYC BES, NYC Building Footprints, and FEMA NFHL.",
+        "Map units are census tract portions clipped to the building-screening bbox. They are not ZIP codes, parcel boundaries, or photo frames. Sources: ACS 2024 5-year tract estimates; NYC BES; NYC Building Footprints; FEMA NFHL.",
         ha="center",
-        fontsize=9,
+        fontsize=8.4,
         color="#444444",
     )
     fig.savefig(FIGURE_DIR / "fig_income_vs_vulnerability_maps.png", dpi=240, bbox_inches="tight")

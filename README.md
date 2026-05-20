@@ -58,6 +58,18 @@ The generated files are:
 - `data/summary/tract_flood_demographic_summary.csv`
 - `data/summary/parts_bcd_summary.json`
 
+## How the Tract Map Is Composed
+
+`fig_income_vs_vulnerability_maps.png` is not a ZIP-code map, parcel map, or outline copied from the field photographs. It is a census-tract screening map:
+
+- TIGER 2024 census tracts are selected when they intersect the Coney Island building-screening bbox.
+- The displayed tract geometry is clipped to that bbox so full tracts outside the study area do not distort the shape.
+- The dashed rectangle is the building-screening bbox used by the app dataset.
+- Tract colors show tract-level ACS income and tract-level below-BFE share for buildings assigned to each tract.
+- The map is projected into local miles before plotting so the east-west and north-south proportions are not distorted by raw longitude/latitude degrees.
+
+The figure is meant to show tract context for the screening area. It should not be read as an official Coney Island boundary.
+
 ## Trust and Limitations
 
 This repository is sufficient to regenerate the paper's visualization figures from the included building-level screening GeoJSON and live ACS 2024 tract data.
